@@ -49,8 +49,8 @@ var nameIndexMap = map[string](*big.Int){
 	"USDT": big.NewInt(2),
 
 	"SUSD": big.NewInt(3),
-	"BUSD": big.NewInt(3),
-	"GUSD": big.NewInt(3),
+	"BUSD": big.NewInt(0),
+	"GUSD": big.NewInt(0),
 }
 
 func NewCurveProvider(client *ethclient.Client) (*CurveProvider, error) {
@@ -76,27 +76,33 @@ func getPoolList(from string, to string) []interface{} {
 	return intersect.Simple(list1, list2).([]interface{})
 }
 
-// func getCoinIndex(coin string, pool string) []string {
-// 	list1 := namePoolMap[from]
-// 	list2 := namePoolMap[from]
-// 	return intersect.Simple(list1, list2)
-// }
+func getCoinIndex(coin string, pool string) *big.Int {
+	switch pool {
+	case busdv2Pool:
+	case gusdPool:
+		if coin != "BUSD" && coin != "GUSD" {
+			return new(big.Int).Add(nameIndexMap[coin], big.NewInt(1))
+		}
+	}
+	return nameIndexMap[coin]
+}
 
 func (provider *CurveProvider) GetAmountOut(from string, to string, amountIn *big.Int) (*big.Rat, error) {
 	poolList := getPoolList(from, to)
 
-	fromIdx := nameIndexMap[from]
-	toIdx := nameIndexMap[to]
-	// add check if swapping pare is invalid
-
+	// todo: add check if swapping pare is invalid
 	max := big.NewInt(0)
 	for _, p := range poolList {
 		ps := p.(string)
 
+		fromIdx := getCoinIndex(from, ps)
+		toIdx := getCoinIndex(to, ps)
+
 		amountOut, _ := provider.PoolInstances[ps].GetDyUnderlying(nil, fromIdx, toIdx, amountIn)
+		fmt.Printf("pool is: %s, %s \n", ps, amountOut.String())
+
 		if amountOut.Cmp(max) > 0 {
 			max = amountOut
-			fmt.Printf("pool is: %s, %s \n", ps, max.String())
 		}
 	}
 	retMax := new(big.Rat).SetInt(max)
