@@ -13,17 +13,16 @@ import (
 type UniswapProvider struct {
 	TransactionFee  int64
 	ContractAddress common.Address
-	// Instance        *UniswapContract.UniswapV2Pair
-	Pairs map[string](*UniswapContract.UniswapV2Pair)
+	Pairs           map[string](*UniswapContract.UniswapV2Pair)
 }
 
-var nameAddress = map[string]common.Address{
-	"USDC": common.HexToAddress("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"),
-	"USDT": common.HexToAddress("0xdAC17F958D2ee523a2206206994597C13D831ec7"),
-	"DAI":  common.HexToAddress("0x6b175474e89094c44da98b954eedeac495271d0f"),
-	"BUSD": common.HexToAddress("0x4fabb145d64652a948d72533023f6e7a623c7c53"),
-	"GUSD": common.HexToAddress("0x056fd409e1d7a124bd7017459dfea2f387b6d5cd"),
-}
+// var nameAddress = map[string]common.Address{
+// 	"USDC": common.HexToAddress("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"),
+// 	"USDT": common.HexToAddress("0xdAC17F958D2ee523a2206206994597C13D831ec7"),
+// 	"DAI":  common.HexToAddress("0x6b175474e89094c44da98b954eedeac495271d0f"),
+// 	"BUSD": common.HexToAddress("0x4fabb145d64652a948d72533023f6e7a623c7c53"),
+// 	"GUSD": common.HexToAddress("0x056fd409e1d7a124bd7017459dfea2f387b6d5cd"),
+// }
 
 var pairAddress = map[string]common.Address{
 	"BUSD-USDC": common.HexToAddress("0x524847c615639e76fe7d0fe0b16be8c4eac9cf3c"),

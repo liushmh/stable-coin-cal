@@ -29,7 +29,7 @@ func main() {
 	}
 
 	// provider, err := exchange.NewUniswapProvider(client)
-	provider, err := exchange.NewCurveProvider(client)
+	provider, err := exchange.NewMStableProvider(client)
 
 	if err != nil {
 		log.Fatal(err)
