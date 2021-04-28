@@ -38,8 +38,11 @@ func main() {
 	million := new(big.Int)
 	million.SetString("1000000000000", 10)
 
-	info, err := provider.GetAmountOut("USDT", "GUSD", million)
+	info, err := provider.GetAmountOut("USDT", "BUSD", million)
 	fmt.Printf("how much we get: %s \n", info.FloatString(8))
+
+	price, err := provider.GetPriceAfterAmount("USDT", "BUSD", million)
+	fmt.Printf("new price after swap: %s \n", price.FloatString(8))
 
 	if err != nil {
 		log.Fatal(err)
