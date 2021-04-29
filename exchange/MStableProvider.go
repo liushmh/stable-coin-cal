@@ -12,7 +12,7 @@ import (
 )
 
 type MStableProvider struct {
-	TransactionFee  int64
+	Fee             int64
 	ContractAddress common.Address
 	Pools           map[string](*MStableContract.MStable)
 }
@@ -28,6 +28,7 @@ var poolAssetAddress = map[string]common.Address{
 func NewMStableProvider(client *ethclient.Client) (*MStableProvider, error) {
 	provider := MStableProvider{}
 	provider.Pools = make(map[string](*MStableContract.MStable))
+	provider.Fee = 3
 
 	err := error(nil)
 
@@ -61,17 +62,19 @@ func _getAmountFromAsset(instance *MStableContract.MStable, from string, to stri
 	}
 }
 
-func (provider *MStableProvider) getAmountOutImpl(from string, to string, amountIn *big.Int) (amountOut *big.Int, err error) {
+func (provider *MStableProvider) getAmountOutImpl(from string, to string, amountIn *big.Int) (amountOut *big.Int, fee *big.Int, err error) {
 	upFrom := strings.ToUpper(from)
 	upTo := strings.ToUpper(to)
 
-	amountIn = new(big.Int).Mul(amountIn, tokenDecimalMap[upFrom])
+	realAmountIn := new(big.Int).Mul(amountIn, tokenDecimalMap[upFrom])
+	fee = new(big.Int).Mul(amountIn, big.NewInt(provider.Fee))
 
 	if upFrom == "MUSD" || upTo == "MUSD" {
-		amountOut, err = _getAmountFromAsset(provider.Pools["MUSD"], upFrom, upTo, amountIn)
+		amountOut, err = _getAmountFromAsset(provider.Pools["MUSD"], upFrom, upTo, realAmountIn)
 	} else {
+		fee = new(big.Int).Mul(fee, big.NewInt(2))
 		poolName := getPoolName(upFrom, upTo)
-		amountOut, err = provider.Pools[poolName].GetSwapOutput(nil, nameAddress[upFrom], nameAddress[upTo], amountIn)
+		amountOut, err = provider.Pools[poolName].GetSwapOutput(nil, nameAddress[upFrom], nameAddress[upTo], realAmountIn)
 	}
 
 	// amountOut = new(big.Int).Div(tmpOut, tokenDecimalMap[upTo])
@@ -79,23 +82,27 @@ func (provider *MStableProvider) getAmountOutImpl(from string, to string, amount
 }
 
 // todo: if it's BUSD, we have extra 12 zeros
-func (provider *MStableProvider) GetAmountOut(from string, to string, amountIn *big.Int) (*big.Rat, error) {
-	amountOut, err := provider.getAmountOutImpl(from, to, amountIn)
+func (provider *MStableProvider) GetAmountOut(from string, to string, amountIn *big.Int) (*big.Rat, *big.Rat, error) {
+	amountOut, fee, err := provider.getAmountOutImpl(from, to, amountIn)
+	if err != nil {
+		// log.Fatal("cannot ")
+		return nil, nil, err
+	}
 	amountOut = new(big.Int).Div(amountOut, tokenDecimalMap[strings.ToUpper(to)])
 
-	return new(big.Rat).SetInt(amountOut), err
+	return new(big.Rat).SetInt(amountOut), new(big.Rat).SetFrac(fee, big.NewInt(1e4)), err
 }
 
 func (provider *MStableProvider) GetPriceAfterAmount(from string, to string, amountIn *big.Int) (price *big.Rat, err error) {
 
 	dx1 := big.NewInt(10000)
 	dx2 := big.NewInt(20000)
-	dy1, _ := provider.getAmountOutImpl(from, to, dx1)
-	dy2, _ := provider.getAmountOutImpl(from, to, dx2)
+	dy1, _, _ := provider.getAmountOutImpl(from, to, dx1)
+	dy2, _, _ := provider.getAmountOutImpl(from, to, dx2)
 
 	x, y := calculateXY(dx1, dy1, dx2, dy2)
 
-	amountOut, _ := provider.getAmountOutImpl(from, to, amountIn)
+	amountOut, _, _ := provider.getAmountOutImpl(from, to, amountIn)
 
 	newY := new(big.Int).Sub(y, amountOut)
 	if newY.Cmp(big.NewInt(0)) <= 0 {

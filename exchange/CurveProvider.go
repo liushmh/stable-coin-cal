@@ -1,7 +1,6 @@
 package exchange
 
 import (
-	"fmt"
 	CurveContract "hex/amm/v1/CurveContract"
 	"math/big"
 	"strings"
@@ -57,7 +56,7 @@ var nameIndexMap = map[string](*big.Int){
 func NewCurveProvider(client *ethclient.Client) (*CurveProvider, error) {
 	provider := CurveProvider{}
 	provider.PoolInstances = make(map[string](*CurveContract.Curve))
-
+	provider.Fee = 4
 	err := error(nil)
 
 	for _, p := range poolList {
@@ -105,7 +104,7 @@ func (provider *CurveProvider) getAmountOutImpl(from string, to string, amountIn
 
 		amountOut, _ := provider.PoolInstances[ps].GetDyUnderlying(nil, fromIdx, toIdx, amountIn)
 		amountOut = new(big.Int).Div(amountOut, tokenDecimalMap[strings.ToUpper(to)])
-		fmt.Printf("from: %d , to : %d pool: %s, amount out: %d \n ", fromIdx, toIdx, ps, amountOut)
+		// fmt.Printf("from: %d , to : %d pool: %s, amount out: %d \n ", fromIdx, toIdx, ps, amountOut)
 
 		if amountOut.Cmp(max) > 0 {
 			max = amountOut
@@ -115,11 +114,13 @@ func (provider *CurveProvider) getAmountOutImpl(from string, to string, amountIn
 	return max, selectedPool, nil
 }
 
-func (provider *CurveProvider) GetAmountOut(from string, to string, amountIn *big.Int) (*big.Rat, error) {
+func (provider *CurveProvider) GetAmountOut(from string, to string, amountIn *big.Int) (*big.Rat, *big.Rat, error) {
 	amountOut, _, _ := provider.getAmountOutImpl(from, to, amountIn, nil)
 
 	retMax := new(big.Rat).SetInt(amountOut)
-	return retMax, nil
+	// tmp := new(big.Int).Mul(big.NewInt(provider.Fee), amountIn)
+	fee := new(big.Rat).SetFrac(new(big.Int).Mul(big.NewInt(provider.Fee), amountIn), big.NewInt(1e4))
+	return retMax, fee, nil
 }
 
 func (provider *CurveProvider) GetPriceAfterAmount(from string, to string, amountIn *big.Int) (price *big.Rat, err error) {
@@ -130,7 +131,7 @@ func (provider *CurveProvider) GetPriceAfterAmount(from string, to string, amoun
 	fromBalance, _ := provider.PoolInstances[pool].Balances(nil, fromIdx)
 	toBalance, _ := provider.PoolInstances[pool].Balances(nil, toIdx)
 
-	fmt.Printf("Choose pool: %s, with balance: %d \n", pool, fromBalance)
+	// fmt.Printf("Choose pool: %s, with balance: %d \n", pool, fromBalance)
 
 	fromBalance = new(big.Int).Add(fromBalance, amountIn)
 	// fromBalance = new(big.Int).Mul(fromBalance, tokenDecimalMap[strings.ToUpper(to)])

@@ -12,7 +12,7 @@ import (
 )
 
 type UniswapProvider struct {
-	TransactionFee  int64
+	Fee             int64
 	ContractAddress common.Address
 	Pairs           map[string](*UniswapContract.UniswapV2Pair)
 }
@@ -70,7 +70,7 @@ func calculateY(total_x, total_y, x *big.Int) *big.Int {
 	return dy
 }
 
-func (provider *UniswapProvider) GetAmountOut(from string, to string, amountIn *big.Int) (*big.Rat, error) {
+func (provider *UniswapProvider) GetAmountOut(from string, to string, amountIn *big.Int) (*big.Rat, *big.Rat, error) {
 
 	pairName := getPairName(from, to)
 
@@ -83,6 +83,8 @@ func (provider *UniswapProvider) GetAmountOut(from string, to string, amountIn *
 	}
 	amountIn = new(big.Int).Mul(amountIn, tokenDecimalMap[strings.ToUpper(from)])
 	tradingAmount := new(big.Int).Div(new(big.Int).Mul(amountIn, big.NewInt(997)), big.NewInt(1000))
+	fee := new(big.Int).Sub(amountIn, tradingAmount)
+	realFee := new(big.Rat).SetFrac(fee, tokenDecimalMap[strings.ToUpper(from)])
 
 	var dy *big.Int
 	if from < to {
@@ -91,9 +93,9 @@ func (provider *UniswapProvider) GetAmountOut(from string, to string, amountIn *
 		dy = calculateY(reserves.Reserve1, reserves.Reserve0, tradingAmount)
 	}
 
-	dy = new(big.Int).Div(dy, tokenDecimalMap[strings.ToUpper(to)])
+	amountOut := new(big.Rat).SetFrac(dy, tokenDecimalMap[strings.ToUpper(to)])
 
-	return new(big.Rat).SetInt(dy), nil
+	return amountOut, realFee, nil
 }
 
 func (provider *UniswapProvider) GetPriceAfterAmount(from string, to string, amountIn *big.Int) (price *big.Rat, err error) {

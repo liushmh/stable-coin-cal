@@ -7,7 +7,7 @@ import (
 )
 
 type ExchangeProvider interface {
-	GetAmountOut(from string, to string, amountIn *big.Int) (*big.Rat, error)
+	GetAmountOut(from string, to string, amountIn *big.Int) (*big.Rat, *big.Rat, error)
 	GetPriceAfterAmount(from string, to string, amountIn *big.Int) (price *big.Rat, err error)
 }
 
