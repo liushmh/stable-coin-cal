@@ -29,20 +29,20 @@ func main() {
 	}
 
 	// provider, err := exchange.NewUniswapProvider(client)
-	provider, err := exchange.NewMStableProvider(client)
+	// provider, err := exchange.NewMStableProvider(client)
+	provider, err := exchange.NewCurveProvider(client)
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	million := new(big.Int)
-	million.SetString("1000000000000", 10)
+	million := big.NewInt(1e6)
 
-	info, err := provider.GetAmountOut("USDT", "BUSD", million)
+	info, err := provider.GetAmountOut("DAI", "USDC", million)
 	fmt.Printf("how much we get: %s \n", info.FloatString(8))
 
-	price, err := provider.GetPriceAfterAmount("USDT", "BUSD", million)
-	fmt.Printf("new price after swap: %s \n", price.FloatString(8))
+	// price, err := provider.GetPriceAfterAmount("DAI", "USDC", million)
+	// fmt.Printf("new price after swap: %s \n", price.FloatString(8))
 
 	if err != nil {
 		log.Fatal(err)

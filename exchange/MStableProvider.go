@@ -2,7 +2,6 @@ package exchange
 
 import (
 	"errors"
-	"fmt"
 	MStableContract "hex/amm/v1/MStableContract"
 
 	"math/big"
@@ -62,42 +61,47 @@ func _getAmountFromAsset(instance *MStableContract.MStable, from string, to stri
 	}
 }
 
-func (provider *MStableProvider) getAmountOutImpl(from string, to string, amountIn *big.Int) (*big.Int, error) {
+func (provider *MStableProvider) getAmountOutImpl(from string, to string, amountIn *big.Int) (amountOut *big.Int, err error) {
 	upFrom := strings.ToUpper(from)
 	upTo := strings.ToUpper(to)
 
+	amountIn = new(big.Int).Mul(amountIn, tokenDecimalMap[upFrom])
+
 	if upFrom == "MUSD" || upTo == "MUSD" {
-		return _getAmountFromAsset(provider.Pools["MUSD"], upFrom, upTo, amountIn)
+		amountOut, err = _getAmountFromAsset(provider.Pools["MUSD"], upFrom, upTo, amountIn)
+	} else {
+		poolName := getPoolName(upFrom, upTo)
+		amountOut, err = provider.Pools[poolName].GetSwapOutput(nil, nameAddress[upFrom], nameAddress[upTo], amountIn)
 	}
 
-	poolName := getPoolName(upFrom, upTo)
-	return provider.Pools[poolName].GetSwapOutput(nil, nameAddress[upFrom], nameAddress[upTo], amountIn)
+	// amountOut = new(big.Int).Div(tmpOut, tokenDecimalMap[upTo])
+	return
 }
 
 // todo: if it's BUSD, we have extra 12 zeros
 func (provider *MStableProvider) GetAmountOut(from string, to string, amountIn *big.Int) (*big.Rat, error) {
 	amountOut, err := provider.getAmountOutImpl(from, to, amountIn)
+	amountOut = new(big.Int).Div(amountOut, tokenDecimalMap[strings.ToUpper(to)])
+
 	return new(big.Rat).SetInt(amountOut), err
 }
 
 func (provider *MStableProvider) GetPriceAfterAmount(from string, to string, amountIn *big.Int) (price *big.Rat, err error) {
-	dx1 := big.NewInt(10000000000)
-	dx2 := big.NewInt(20000000000)
+
+	dx1 := big.NewInt(10000)
+	dx2 := big.NewInt(20000)
 	dy1, _ := provider.getAmountOutImpl(from, to, dx1)
 	dy2, _ := provider.getAmountOutImpl(from, to, dx2)
 
-	fmt.Printf("dy1 is %d, dy2 is %d \n", dy1, dy2)
-
 	x, y := calculateXY(dx1, dy1, dx2, dy2)
 
-	fmt.Printf("x is %d, y is %d \n", x, y)
 	amountOut, _ := provider.getAmountOutImpl(from, to, amountIn)
 
 	newY := new(big.Int).Sub(y, amountOut)
 	if newY.Cmp(big.NewInt(0)) <= 0 {
 		err = errors.New("Wrong Amount")
 	}
-
+	newY = new(big.Int).Div(newY, tokenDecimalMap[strings.ToUpper(to)])
 	price = new(big.Rat).SetFrac(new(big.Int).Add(x, amountIn), newY)
 	return
 }

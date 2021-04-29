@@ -1,7 +1,6 @@
 package exchange
 
 import (
-	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -9,6 +8,7 @@ import (
 
 type ExchangeProvider interface {
 	GetAmountOut(from string, to string, amountIn *big.Int) (*big.Rat, error)
+	GetPriceAfterAmount(from string, to string, amountIn *big.Int) (price *big.Rat, err error)
 }
 
 const (
@@ -31,13 +31,22 @@ var nameAddress = map[string]common.Address{
 	"MUSD": common.HexToAddress("0xe2f2a5C287993345a840Db3B0845fbC70f5935a5"),
 }
 
+var tokenDecimalMap = map[string](*big.Int){
+	"USDC": big.NewInt(1e6),
+	"USDT": big.NewInt(1e6),
+	"DAI":  big.NewInt(1e18),
+	"BUSD": big.NewInt(1e18),
+	"GUSD": big.NewInt(1e2),
+	"SUSD": big.NewInt(1e18),
+	"MUSD": big.NewInt(1e18),
+}
+
 func calculateXY(dx1 *big.Int, dy1 *big.Int, dx2 *big.Int, dy2 *big.Int) (x *big.Int, y *big.Int) {
 	n := new(big.Int).Sub(new(big.Int).Mul(dx2, dy2), new(big.Int).Mul(big.NewInt(2), new(big.Int).Mul(dx1, dy1)))
 	d := new(big.Int).Sub(new(big.Int).Mul(big.NewInt(2), dy1), dy2)
 
 	x = new(big.Int).Div(n, d)
 	n2 := new(big.Int).Add(new(big.Int).Mul(x, dy1), new(big.Int).Mul(dx1, dy1))
-	fmt.Printf("n2 is %d \n", n2)
 	y = new(big.Int).Div(n2, dx1)
 	return
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	CurveContract "hex/amm/v1/CurveContract"
 	"math/big"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -11,8 +12,8 @@ import (
 )
 
 type CurveProvider struct {
-	TransactionFee int64
-	PoolInstances  map[string](*CurveContract.Curve)
+	Fee           int64 //0.04%,  4000000
+	PoolInstances map[string](*CurveContract.Curve)
 }
 
 const (
@@ -78,8 +79,7 @@ func getPoolList(from string, to string) []interface{} {
 
 func getCoinIndex(coin string, pool string) *big.Int {
 	switch pool {
-	case busdv2Pool:
-	case gusdPool:
+	case busdv2Pool, gusdPool:
 		if coin != "BUSD" && coin != "GUSD" {
 			return new(big.Int).Add(nameIndexMap[coin], big.NewInt(1))
 		}
@@ -87,24 +87,65 @@ func getCoinIndex(coin string, pool string) *big.Int {
 	return nameIndexMap[coin]
 }
 
-func (provider *CurveProvider) GetAmountOut(from string, to string, amountIn *big.Int) (*big.Rat, error) {
+func (provider *CurveProvider) getAmountOutImpl(from string, to string, amountIn *big.Int, excludedPool *string) (*big.Int, string, error) {
 	poolList := getPoolList(from, to)
 
+	amountIn = new(big.Int).Mul(amountIn, tokenDecimalMap[strings.ToUpper(from)])
 	// todo: add check if swapping pare is invalid
+
 	max := big.NewInt(0)
+	var selectedPool string
 	for _, p := range poolList {
 		ps := p.(string)
-
+		if excludedPool != nil && *excludedPool == ps {
+			continue
+		}
 		fromIdx := getCoinIndex(from, ps)
 		toIdx := getCoinIndex(to, ps)
 
 		amountOut, _ := provider.PoolInstances[ps].GetDyUnderlying(nil, fromIdx, toIdx, amountIn)
-		fmt.Printf("pool is: %s, %s \n", ps, amountOut.String())
+		amountOut = new(big.Int).Div(amountOut, tokenDecimalMap[strings.ToUpper(to)])
+		fmt.Printf("from: %d , to : %d pool: %s, amount out: %d \n ", fromIdx, toIdx, ps, amountOut)
 
 		if amountOut.Cmp(max) > 0 {
 			max = amountOut
+			selectedPool = ps
 		}
 	}
-	retMax := new(big.Rat).SetInt(max)
+	return max, selectedPool, nil
+}
+
+func (provider *CurveProvider) GetAmountOut(from string, to string, amountIn *big.Int) (*big.Rat, error) {
+	amountOut, _, _ := provider.getAmountOutImpl(from, to, amountIn, nil)
+
+	retMax := new(big.Rat).SetInt(amountOut)
 	return retMax, nil
 }
+
+func (provider *CurveProvider) GetPriceAfterAmount(from string, to string, amountIn *big.Int) (price *big.Rat, err error) {
+	amountOut, pool, _ := provider.getAmountOutImpl(from, to, amountIn, nil)
+
+	fromIdx := getCoinIndex(from, pool)
+	toIdx := getCoinIndex(to, pool)
+	fromBalance, _ := provider.PoolInstances[pool].Balances(nil, fromIdx)
+	toBalance, _ := provider.PoolInstances[pool].Balances(nil, toIdx)
+
+	fmt.Printf("Choose pool: %s, with balance: %d \n", pool, fromBalance)
+
+	fromBalance = new(big.Int).Add(fromBalance, amountIn)
+	// fromBalance = new(big.Int).Mul(fromBalance, tokenDecimalMap[strings.ToUpper(to)])
+
+	price = new(big.Rat).SetFrac(fromBalance, new(big.Int).Sub(toBalance, amountOut))
+
+	amountOut, _, _ = provider.getAmountOutImpl(from, to, amountIn, &pool) // get other pool amount
+	// amountOut = new(big.Int).Div(amountOut, tokenDecimalMap[strings.ToUpper(to)])
+	otherPoolPrice := new(big.Rat).SetFrac(amountOut, amountIn) // calculate other pools' best price
+
+	if price.Cmp(otherPoolPrice) < 0 {
+		price = otherPoolPrice
+	}
+	// price = new(big.Rat).SetFrac(price, tokenDecimalMap[strings.ToUpper(to)])
+	return
+}
+
+// https://etherscan.io/address/0xA2B47E3D5c44877cca798226B7B8118F9BFb7A56#code

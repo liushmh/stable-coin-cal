@@ -1,6 +1,7 @@
 package exchange
 
 import (
+	"errors"
 	UniswapContract "hex/amm/v1/UniswapContract"
 	"log"
 	"math/big"
@@ -58,13 +59,12 @@ func getPairName(from string, to string) string {
 	return upTo + "-" + upFrom
 }
 
-func calculateY(total_x, total_y, x *big.Int) *big.Rat {
+func calculateY(total_x, total_y, x *big.Int) *big.Int {
 	cp := new(big.Int).Mul(total_x, total_y)
 	new_x := new(big.Int).Add(total_x, x)
-	new_y := new(big.Rat).SetFrac(cp, new_x)
+	new_y := new(big.Int).Div(cp, new_x)
 
-	dy := new(big.Rat).Sub(new(big.Rat).SetInt(total_y), new_y)
-
+	dy := new(big.Int).Sub(total_y, new_y)
 	// fmt.Printf("get : %s y \n", dy.FloatString(8))
 	// price := new(big.Rat).Mul(new(big.Rat).SetInt(x), new(big.Rat).Inv(dy))
 	return dy
@@ -74,22 +74,60 @@ func (provider *UniswapProvider) GetAmountOut(from string, to string, amountIn *
 
 	pairName := getPairName(from, to)
 
-	// fromAddress := nameAddress[strings.ToUpper(from)]
-	// toAddress := nameAddress[strings.ToUpper(to)]
-
 	reserves, err := provider.Pairs[pairName].GetReserves(nil)
+	// if reserves != nil {
+	// 	return nil, errors.New("no such pair in uniswap")
+	// }
 	if err != nil {
 		log.Fatal(err)
 	}
-
+	amountIn = new(big.Int).Mul(amountIn, tokenDecimalMap[strings.ToUpper(from)])
 	tradingAmount := new(big.Int).Div(new(big.Int).Mul(amountIn, big.NewInt(997)), big.NewInt(1000))
 
-	var dy *big.Rat
+	var dy *big.Int
 	if from < to {
 		dy = calculateY(reserves.Reserve0, reserves.Reserve1, tradingAmount)
 	} else {
 		dy = calculateY(reserves.Reserve1, reserves.Reserve0, tradingAmount)
 	}
 
-	return dy, nil
+	dy = new(big.Int).Div(dy, tokenDecimalMap[strings.ToUpper(to)])
+
+	return new(big.Rat).SetInt(dy), nil
+}
+
+func (provider *UniswapProvider) GetPriceAfterAmount(from string, to string, amountIn *big.Int) (price *big.Rat, err error) {
+
+	pairName := getPairName(from, to)
+
+	reserves, err := provider.Pairs[pairName].GetReserves(nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	amountIn = new(big.Int).Mul(amountIn, tokenDecimalMap[strings.ToUpper(from)])
+	dx := new(big.Int).Div(new(big.Int).Mul(amountIn, big.NewInt(997)), big.NewInt(1000))
+
+	var x, y, dy *big.Int
+
+	if from < to {
+		dy = calculateY(reserves.Reserve0, reserves.Reserve1, dx)
+		x = reserves.Reserve0
+		y = reserves.Reserve1
+	} else {
+		dy = calculateY(reserves.Reserve1, reserves.Reserve0, dx)
+		x = reserves.Reserve1
+		y = reserves.Reserve0
+	}
+
+	x = new(big.Int).Add(x, dx)
+	y = new(big.Int).Sub(y, dy)
+
+	if y.Cmp(big.NewInt(0)) <= 0 {
+		err = errors.New("Wrong Amount")
+	}
+	// y = new(big.Int).Div(y, tokenDecimalMap[strings.ToUpper(to)])
+	x = new(big.Int).Mul(x, tokenDecimalMap[strings.ToUpper(to)])
+	price = new(big.Rat).SetFrac(x, y)
+	return
 }
